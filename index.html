@@ -617,8 +617,7 @@ function carte(p){
       principal = `<button type="button" class="btn primary" data-act="partant">${lib.btn}</button>`;
     }
     actions = principal +
-      `<button type="button" class="btn ghost small" data-act="copier">Copier le pseudo</button>` +
-      `<button type="button" class="btn ghost small" data-act="signaler"${deja ? ' disabled' : ''}>${deja ? 'Signalée' : 'Signaler'}</button>`;
+      `<button type="button" class="btn ghost" data-act="signaler"${deja ? ' disabled' : ''}>${deja ? 'Signalée' : 'Signaler'}</button>`;
   }
   const masquee = moi && S.masques.has(p.uid);
   return `<article class="post${moi ? ' mine' : ''}" data-id="${esc(p.uid)}">
