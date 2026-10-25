@@ -197,6 +197,10 @@ textarea.inp{resize:vertical;min-height:96px;line-height:1.45}
 .sheet-card{background:var(--bg);border-radius:22px 22px 0 0;max-height:92vh;overflow:auto;display:grid;gap:16px;padding-top:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:560px;width:100%;margin:0 auto;box-shadow:var(--shadow)}
 .sheet-card p{margin:0}
 
+.gis{min-height:44px;display:flex;justify-content:center}
+.nav-steps{margin:0;padding-left:22px;display:grid;gap:8px;font-size:14.5px}
+#nav-lien{font-size:13px;padding:8px 10px}
+
 /* Toast */
 .toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 16px);z-index:9;margin:0 auto;max-width:440px;background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:14px;font-weight:500;font-size:14px;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s}
 .toast.show{opacity:1;transform:none}
@@ -217,6 +221,10 @@ textarea.inp{resize:vertical;min-height:96px;line-height:1.45}
 <main class="wrap">
 
   <div class="banner warn" id="etat" hidden><p id="etat-txt"></p></div>
+  <div class="banner warn" id="integre" hidden>
+    <p>Tu es dans le navigateur d'une appli (TikTok, Instagram…). Tu peux lire les annonces, mais pour te connecter, ouvre Escouade dans Safari ou Chrome.</p>
+    <button type="button" class="btn ghost small" id="integre-aide">Comment faire ?</button>
+  </div>
 
   <section id="vue-annonces">
     <p class="intro">Trouve des coéquipiers, demande un coup de main ou aide les autres joueurs.</p>
@@ -415,6 +423,41 @@ textarea.inp{resize:vertical;min-height:96px;line-height:1.45}
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<div class="sheet" id="sheet-login" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="login-titre">
+    <div>
+      <h3 id="login-titre">Se connecter</h3>
+      <p class="hint">La connexion avec Google évite le spam et permet de bloquer les arnaqueurs. Ton nom et ton e-mail ne sont jamais montrés aux autres joueurs.</p>
+    </div>
+    <div class="gis" id="gis-btn"></div>
+    <p class="hint" id="login-info">Chargement du bouton Google…</p>
+    <p class="err" id="login-err" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="login-fermer">Fermer</button>
+      <button type="button" class="btn link" id="login-autre">Ça ne marche pas ? Autre méthode</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-nav" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="nav-titre">
+    <div>
+      <h3 id="nav-titre">Ouvre Escouade dans ton navigateur</h3>
+      <p class="hint">Google bloque la connexion dans les navigateurs intégrés aux applis comme TikTok ou Instagram.</p>
+    </div>
+    <ul class="nav-steps">
+      <li>Touche <b>•••</b> ou l'icône de partage, en haut ou en bas de l'écran.</li>
+      <li>Choisis <b>Ouvrir dans le navigateur</b> (ou « Ouvrir dans Safari »).</li>
+      <li>Si tu ne trouves pas l'option, copie le lien et colle-le dans Safari ou Chrome.</li>
+    </ul>
+    <p class="mono" id="nav-lien"></p>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="nav-fermer">Fermer</button>
+      <button type="button" class="btn primary" id="nav-copier">Copier le lien</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="sheet" hidden>
   <form class="sheet-card" id="pform" novalidate role="dialog" aria-modal="true" aria-labelledby="pform-titre">
     <div>
@@ -459,6 +502,8 @@ const firebaseConfig = {
   messagingSenderId: "1001446719504",
   appId: "1:1001446719504:web:7f3721cf5bf166ce548a95"
 };
+// L'« ID client Web » de Google : Firebase > Authentication > Méthode de connexion > Google > Configuration du SDK Web.
+const GOOGLE_CLIENT_ID = "1001446719504-71c7b09nnni61r1brse2p97dmhsg28b8.apps.googleusercontent.com";
 // L'adresse où les joueurs peuvent te contacter (suppression de compte, etc.).
 const CONTACT = "contact.escouades@gmail.com";
 // =====================================================================
@@ -863,7 +908,12 @@ function ouvrirPartant(p){
 function fermerPartant(){ $('#sheet').hidden = true; S.pform = null; }
 $('#pform-annuler').addEventListener('click', fermerPartant);
 $('#sheet').addEventListener('click', e => { if(e.target.id === 'sheet') fermerPartant(); });
-document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#sheet').hidden) fermerPartant(); });
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Escape') return;
+  if(!$('#sheet').hidden) fermerPartant();
+  if(!$('#sheet-nav').hidden) $('#sheet-nav').hidden = true;
+  if(!$('#sheet-login').hidden) fermerLogin();
+});
 
 $('#pform').addEventListener('submit', async e => {
   e.preventDefault();
@@ -1104,27 +1154,105 @@ function erreur(err){
   if(c === 'auth/unauthorized-domain') return "Ce site n'est pas autorisé dans Firebase : ajoute son adresse dans Authentication > Paramètres > Domaines autorisés.";
   if(c === 'auth/operation-not-allowed') return 'Active la connexion Google dans Firebase : Authentication > Méthode de connexion.';
   if(c === 'auth/network-request-failed') return 'Pas de connexion internet. Réessaie dans un instant.';
+  if(c === 'auth/invalid-credential') return 'Google a refusé la connexion. Réessaie dans quelques minutes.';
   return "Quelque chose n'a pas marché" + (c ? ` (${c})` : '') + '. Réessaie.';
 }
 
+// ---------- Navigateurs intégrés (TikTok, Instagram…) ----------
+// Google refuse la connexion dans ces navigateurs : on explique comment ouvrir le site dans Safari ou Chrome.
+const INTEGRE = /FBAN|FBAV|FB_IAB|Instagram|musical_ly|Bytedance|TikTok|Snapchat|Line\/|Twitter|LinkedInApp|Pinterest/i.test(navigator.userAgent || '');
+const LIEN = location.origin + location.pathname;
+$('#integre').hidden = !INTEGRE || DEMO;
+$('#nav-lien').textContent = LIEN;
+function aideNavigateur(){ $('#sheet-nav').hidden = false; }
+$('#integre-aide').addEventListener('click', aideNavigateur);
+$('#nav-fermer').addEventListener('click', () => { $('#sheet-nav').hidden = true; });
+$('#sheet-nav').addEventListener('click', e => { if(e.target.id === 'sheet-nav') $('#sheet-nav').hidden = true; });
+$('#nav-copier').addEventListener('click', () => copierTexte(LIEN, $('#nav-lien'), () => toast('Lien copié. Colle-le dans Safari ou Chrome.')));
+
 // ---------- Connexion ----------
+// Sur GitHub Pages, la page de connexion de Firebase est sur un autre domaine : Safari et Chrome la bloquent.
+// On utilise donc le bouton officiel de Google, puis on transmet le jeton à Firebase.
+const GIS = !DEMO && GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID !== "A_REMPLIR";
+let gisPret = false, gisCharge = null;
+function chargerGis(){
+  if(!GIS) return Promise.resolve(false);
+  if(gisCharge) return gisCharge;
+  gisCharge = new Promise(resolve => {
+    const sc = document.createElement('script');
+    sc.src = 'https://accounts.google.com/gsi/client';
+    sc.async = true;
+    sc.onload = () => {
+      try{
+        google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID, callback:surJetonGoogle, ux_mode:'popup', auto_select:false, cancel_on_tap_outside:true});
+        gisPret = true; resolve(true);
+      }catch(e){ resolve(false); }
+    };
+    sc.onerror = () => resolve(false);
+    document.head.appendChild(sc);
+  });
+  return gisCharge;
+}
+async function surJetonGoogle(rep){
+  $('#login-err').hidden = true;
+  try{
+    await F.signInWithCredential(auth, F.GoogleAuthProvider.credential(rep.credential));
+    fermerLogin();
+    toast('Tu es connecté.');
+  }catch(err){
+    $('#login-err').textContent = erreur(err);
+    $('#login-err').hidden = false;
+  }
+}
+function fermerLogin(){ $('#sheet-login').hidden = true; }
+async function ouvrirLogin(){
+  $('#login-err').hidden = true;
+  $('#gis-btn').innerHTML = '';
+  $('#login-info').hidden = false;
+  $('#login-info').textContent = 'Chargement du bouton Google…';
+  $('#sheet-login').hidden = false;
+  const ok = await Promise.race([chargerGis(), new Promise(r => setTimeout(() => r(false), 8000))]);
+  if(!ok || !gisPret){
+    $('#login-info').textContent = "Le bouton Google ne s'est pas chargé. Vérifie ta connexion, ou essaie l'autre méthode.";
+    return;
+  }
+  $('#login-info').hidden = true;
+  const sombre = matchMedia('(prefers-color-scheme: dark)').matches;
+  const largeur = Math.max(220, Math.min(400, $('#gis-btn').clientWidth || 320));
+  google.accounts.id.renderButton($('#gis-btn'), {type:'standard', theme: sombre ? 'filled_black' : 'outline', size:'large', shape:'pill', text:'continue_with', logo_alignment:'left', locale:'fr', width:largeur});
+}
+$('#login-fermer').addEventListener('click', fermerLogin);
+$('#sheet-login').addEventListener('click', e => { if(e.target.id === 'sheet-login') fermerLogin(); });
+$('#login-autre').addEventListener('click', () => { fermerLogin(); connexionPopup(); });
+
 async function connexion(){
   if(DEMO){ toast('Mode démo : ajoute ta configuration Firebase pour activer la connexion.'); return; }
+  if(INTEGRE){ aideNavigateur(); return; }
   if(!F){ toast('Chargement en cours, réessaie dans un instant.'); return; }
+  if(GIS){ ouvrirLogin(); return; }
+  connexionPopup();
+}
+// Ancienne méthode (fenêtre Firebase) : gardée en secours.
+async function connexionPopup(){
+  if(!F) return;
   const provider = new F.GoogleAuthProvider();
   provider.setCustomParameters({prompt:'select_account'});
   try{ await F.signInWithPopup(auth, provider); }
   catch(err){
     const c = err && err.code;
     if(c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return;
-    if(c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment'){
-      try{ await F.signInWithRedirect(auth, provider); return; }catch(e2){ toast(erreur(e2)); return; }
+    if(c === 'auth/popup-blocked'){
+      toast('Ton navigateur a bloqué la fenêtre de connexion. Autorise les pop-ups pour ce site, puis réessaie.'); return;
+    }
+    if(c === 'auth/operation-not-supported-in-this-environment' || c === 'auth/web-storage-unsupported' || c === 'auth/internal-error'){
+      aideNavigateur(); return;
     }
     toast(erreur(err));
   }
 }
 async function deconnexion(){
   if(!F) return;
+  try{ if(gisPret) google.accounts.id.disableAutoSelect(); }catch(e){}
   try{ await F.signOut(auth); toast('Tu es déconnecté.'); vue('annonces'); }catch(err){ toast(erreur(err)); }
 }
 
@@ -1289,7 +1417,8 @@ async function demarrer(){
     etat("Impossible de charger Firebase. Vérifie ta connexion internet, puis recharge la page.");
     afficher(); return;
   }
-  F.getRedirectResult(auth).catch(err => toast(erreur(err)));
+  F.getRedirectResult(auth).catch(() => {});
+  if(!INTEGRE) chargerGis();
   F.onAuthStateChanged(auth, u => { S.user = u ? {uid:u.uid} : null; S.panneau = {}; suivreCompte(); afficher(); });
   suivreAnnonces(); suivreModeration(); compter();
   setInterval(() => { if(!document.hidden) compter(); }, 5 * MIN);
