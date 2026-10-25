@@ -68,7 +68,8 @@ h3{font-family:var(--f-display);font-weight:400;font-size:19px;line-height:1.2;m
 .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;background:var(--surface-2);border-radius:14px}
 .seg button{font-weight:600;font-size:12.5px;line-height:1.2;color:var(--muted);background:transparent;border:0;border-radius:10px;padding:9px 4px;cursor:pointer;text-wrap:balance}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
-.filters{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:10px}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mictog{justify-content:center;min-height:42px}
 .sel{position:relative;min-width:0}
 .sel select{width:100%;appearance:none;-webkit-appearance:none;font-weight:500;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 30px 10px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .sel::after{content:"";position:absolute;right:13px;top:50%;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-70%) rotate(45deg);pointer-events:none}
@@ -243,6 +244,8 @@ textarea.inp{resize:vertical;min-height:96px;line-height:1.45}
         <select id="flt-mode"><option value="">Tous les modes</option></select></div>
       <div class="sel"><label class="vh" for="flt-plateforme">Plateforme</label>
         <select id="flt-plateforme"><option value="">Toutes plateformes</option></select></div>
+      <div class="sel"><label class="vh" for="flt-langue">Langue</label>
+        <select id="flt-langue"><option value="">Toutes les langues</option></select></div>
       <button type="button" class="mictog" id="flt-micro" aria-pressed="false" title="Seulement les joueurs avec micro">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Micro
       </button>
@@ -306,13 +309,17 @@ textarea.inp{resize:vertical;min-height:96px;line-height:1.45}
           <div class="sel"><select id="f-manque"></select></div></div>
       </div>
 
-      <div class="field"><label class="lbl" for="f-niveau">Ton niveau</label>
-        <div class="sel"><select id="f-niveau">
+      <div class="row2">
+        <div class="field"><label class="lbl" for="f-niveau">Ton niveau</label>
+          <div class="sel"><select id="f-niveau">
           <option value="debutant">Débutant</option>
           <option value="intermediaire" selected>Intermédiaire</option>
           <option value="confirme">Confirmé</option>
           <option value="competitif">Compétitif</option>
-        </select></div></div>
+          </select></div></div>
+        <div class="field"><label class="lbl" for="f-langue">Tu parles</label>
+          <div class="sel"><select id="f-langue"></select></div></div>
+      </div>
 
       <label class="switch" for="f-micro"><span>J'ai un micro</span><input type="checkbox" id="f-micro"></label>
 
@@ -480,6 +487,8 @@ textarea.inp{resize:vertical;min-height:96px;line-height:1.45}
           <option value="competitif">Compétitif</option>
         </select></div></div>
     </div>
+    <div class="field"><label class="lbl" for="p-langue">Tu parles</label>
+      <div class="sel"><select id="p-langue"></select></div></div>
     <label class="switch" for="p-micro"><span>J'ai un micro</span><input type="checkbox" id="p-micro"></label>
     <p class="note">Seul l'auteur de l'annonce voit ton profil. Pas de message : vous vous ajoutez en ami dans le jeu.</p>
     <div class="actions">
@@ -523,6 +532,8 @@ const LIBELLES = {
   besoin: {btn:'Je peux aider', liste:'Volontaires', vide:"Pas encore de volontaire. Les joueurs qui veulent t'aider apparaîtront ici."},
   propose:{btn:"Ça m'intéresse", liste:'Intéressés', vide:"Pas encore d'intéressé. Les joueurs qui veulent ton aide apparaîtront ici."}
 };
+const LANGUES = {fr:'Français', en:'English', es:'Español', de:'Deutsch', it:'Italiano', pt:'Português', nl:'Nederlands', pl:'Polski', tr:'Türkçe', ar:'العربية'};
+const LANGUE_DEFAUT = (() => { const l = (navigator.language || 'fr').slice(0, 2).toLowerCase(); return LANGUES[l] ? l : 'fr'; })();
 const RAISONS = {arnaque:'Arnaque', propos:'Propos déplacés', 'infos-perso':"Demande d'infos perso", autre:'Autre'};
 const SVG = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
 const MIC = `<svg class="ico" ${SVG}><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
@@ -542,7 +553,7 @@ const S = {
   live: new Map(), extra: new Map(), mienne: null,
   partants: [], cleMienne: '', reponses: new Map(), rejoints: lire('escouade.rejoints', {}), pform: null,
   plus: false, chargePlus: false, auto: 0, total: null, modeServeur: true, enPause: false,
-  filtre: {type:'tout', mode:'', plateforme:'', micro:false},
+  filtre: {type:'tout', mode:'', plateforme:'', langue:'', micro:false},
   panneau: {}, signales: new Set(lire('escouade.signales', [])),
   signalements: [], bannis: [], cache: new Map(),
   vue: 'annonces', charge: false
@@ -591,7 +602,9 @@ function carte(p){
     for(let i = 0; i < taille; i++) pts += `<i class="${i < dedans ? '' : 'free'}"></i>`;
     slots = `<span class="slots" aria-hidden="true">${pts}</span><span class="dim">${esc(p.format)} ${dedans}/${taille}</span>`;
   }
-  const meta = [esc(p.plateforme), `<span class="mic">${p.micro ? MIC + 'Micro' : MIC_OFF + 'Sans micro'}</span>`, depuis(p.t)];
+  const meta = [esc(p.plateforme), `<span class="mic">${p.micro ? MIC + 'Micro' : MIC_OFF + 'Sans micro'}</span>`];
+  if(LANGUES[p.langue]) meta.push(`<span lang="${p.langue}">${LANGUES[p.langue]}</span>`);
+  meta.push(depuis(p.t));
   if(p.exemple) meta.push('<span class="ex">Exemple</span>');
 
   const pan = S.panneau[p.uid];
@@ -657,7 +670,7 @@ function listePartants(p){
     }
     return `<div class="prow${choisi ? ' chosen' : ''}" data-p="${esc(x.id)}">
       <div class="prow-head"><div class="avatar" style="--c:var(${couleur(x.pseudo)})" aria-hidden="true">${esc(initiales(x.pseudo))}</div>
-      <div class="who"><div class="pseudo">${esc(x.pseudo)}</div><div class="meta">${esc(x.plateforme)}<span aria-hidden="true">·</span><span class="mic">${x.micro ? MIC + 'Micro' : MIC_OFF + 'Sans micro'}</span>${choisi ? '<span aria-hidden="true">·</span><span class="tag-ok">Choisi</span>' : ''}</div></div>
+      <div class="who"><div class="pseudo">${esc(x.pseudo)}</div><div class="meta">${esc(x.plateforme)}<span aria-hidden="true">·</span><span class="mic">${x.micro ? MIC + 'Micro' : MIC_OFF + 'Sans micro'}</span>${LANGUES[x.langue] ? `<span aria-hidden="true">·</span><span lang="${x.langue}">${LANGUES[x.langue]}</span>` : ''}${choisi ? '<span aria-hidden="true">·</span><span class="tag-ok">Choisi</span>' : ''}</div></div>
       <span class="rarity" style="--r:var(${niv[1]})">${niv[0]}</span></div>
       <div class="actions">${acts}</div></div>`;
   }).join('');
@@ -680,7 +693,7 @@ function afficherFil(){
   const f = S.filtre;
   const liste = all.filter(p =>
     (f.type === 'tout' || p.type === f.type) && (!f.mode || p.mode === f.mode) &&
-    (!f.plateforme || p.plateforme === f.plateforme) && (!f.micro || p.micro));
+    (!f.plateforme || p.plateforme === f.plateforme) && (!f.langue || p.langue === f.langue) && (!f.micro || p.micro));
   $('#feed').innerHTML = liste.map(carte).join('');
   if(!DEMO && S.total !== null) compteur(Math.max(S.total, all.length));
   $('#more').hidden = DEMO || !S.charge || (!S.plus && all.length === 0);
@@ -692,7 +705,7 @@ function afficherFil(){
   if(!DEMO && S.charge && S.plus && !S.chargePlus && liste.length < 8 && S.auto < 3){ S.auto++; voirPlus(); }
   const vide = S.charge && liste.length === 0 && !S.chargePlus;
   $('#vide').hidden = !vide;
-  const filtresActifs = f.type !== 'tout' || f.mode || f.plateforme || f.micro;
+  const filtresActifs = f.type !== 'tout' || f.mode || f.plateforme || f.langue || f.micro;
   $('#vide-txt').textContent = filtresActifs
     ? (S.plus ? 'Rien avec ces filtres parmi les annonces chargées. Touche « Voir plus » pour chercher plus loin.' : 'Aucune annonce avec ces filtres pour le moment.')
     : 'Aucune annonce en ce moment. Sois le premier à publier !';
@@ -795,6 +808,15 @@ remplir($('#flt-plateforme'), PLATEFORMES, true);
 remplir($('#f-mode'), MODES, false);
 remplir($('#f-plateforme'), PLATEFORMES, false);
 remplir($('#p-plateforme'), PLATEFORMES, false);
+function remplirLangues(sel, garder){
+  let html = garder ? sel.innerHTML : '';
+  for(const [k, v] of Object.entries(LANGUES)) html += `<option value="${k}" lang="${k}">${v}</option>`;
+  sel.innerHTML = html;
+}
+remplirLangues($('#flt-langue'), true);
+remplirLangues($('#f-langue'), false);
+remplirLangues($('#p-langue'), false);
+$('#f-langue').value = lire('escouade.profil', {}).langue || LANGUE_DEFAUT;
 
 $$('.seg button').forEach(b => b.addEventListener('click', () => {
   S.filtre.type = b.dataset.type; S.auto = 0;
@@ -806,15 +828,17 @@ $('#flt-mode').addEventListener('change', e => {
   if(db && S.modeServeur) suivreAnnonces(); else afficherFil();
 });
 $('#flt-plateforme').addEventListener('change', e => { S.filtre.plateforme = e.target.value; S.auto = 0; afficherFil(); });
+$('#flt-langue').addEventListener('change', e => { S.filtre.langue = e.target.value; S.auto = 0; afficherFil(); });
 $('#flt-micro').addEventListener('click', e => {
   S.filtre.micro = !S.filtre.micro; S.auto = 0; e.currentTarget.setAttribute('aria-pressed', String(S.filtre.micro)); afficherFil();
 });
 function resetFiltres(){
   const changeMode = S.filtre.mode !== '';
-  S.filtre = {type:'tout', mode:'', plateforme:'', micro:false}; S.auto = 0;
+  S.filtre = {type:'tout', mode:'', plateforme:'', langue:'', micro:false}; S.auto = 0;
   if(changeMode && db && S.modeServeur) suivreAnnonces();
   $('#flt-mode').value = ''; $('#flt-plateforme').value = '';
   $('#flt-micro').setAttribute('aria-pressed', 'false');
+  $('#flt-langue').value = '';
   $$('.seg button').forEach(x => x.setAttribute('aria-pressed', x.dataset.type === 'tout' ? 'true' : 'false'));
 }
 $('#vide-reset').addEventListener('click', () => { resetFiltres(); afficherFil(); });
@@ -901,6 +925,7 @@ function ouvrirPartant(p){
   $('#p-pseudo').value = lire('escouade.pseudo', '');
   $('#p-plateforme').value = prof.plateforme || p.plateforme;
   $('#p-niveau').value = prof.niveau || 'intermediaire';
+  $('#p-langue').value = prof.langue || LANGUE_DEFAUT;
   $('#p-micro').checked = !!prof.micro;
   $('#err-p-pseudo').hidden = true;
   $('#sheet').hidden = false;
@@ -923,7 +948,7 @@ $('#pform').addEventListener('submit', async e => {
   ep.hidden = true;
   if(pseudo.length < 3 || pseudo.length > 16){ ep.textContent = 'Ton pseudo Epic fait entre 3 et 16 caractères.'; ep.hidden = false; $('#p-pseudo').focus(); return; }
   if(perso(pseudo) || /[@/:]/.test(pseudo)){ ep.textContent = 'Mets seulement ton pseudo Epic, sans e-mail, numéro ni lien.'; ep.hidden = false; $('#p-pseudo').focus(); return; }
-  const profil = {plateforme:$('#p-plateforme').value, niveau:$('#p-niveau').value, micro:$('#p-micro').checked};
+  const profil = {plateforme:$('#p-plateforme').value, niveau:$('#p-niveau').value, langue:$('#p-langue').value, micro:$('#p-micro').checked};
   ecrire('escouade.pseudo', pseudo); ecrire('escouade.profil', profil);
   if(!$('#f-pseudo').value) $('#f-pseudo').value = pseudo;
   if(DEMO){
@@ -991,7 +1016,7 @@ function suivrePartants(){
   const avant = new Set();
   let premier = true;
   abos.partants = F.onSnapshot(F.query(F.collection(db, 'annonces', S.user.uid, 'partants'), F.where('annonceTs', '==', S.mienne.ts), F.limit(50)), snap => {
-    S.partants = snap.docs.map(d => { const x = d.data({serverTimestamps:'estimate'}); return {id:d.id, pseudo:String(x.pseudo || ''), niveau:x.niveau, plateforme:x.plateforme, micro:!!x.micro, statut:x.statut, t:x.createdAt ? x.createdAt.toMillis() : Date.now()}; })
+    S.partants = snap.docs.map(d => { const x = d.data({serverTimestamps:'estimate'}); return {id:d.id, pseudo:String(x.pseudo || ''), niveau:x.niveau, plateforme:x.plateforme, langue:x.langue || '', micro:!!x.micro, statut:x.statut, t:x.createdAt ? x.createdAt.toMillis() : Date.now()}; })
       .sort((a, b) => a.t - b.t);
     if(!premier) S.partants.filter(x => !avant.has(x.id)).forEach(x => toast(`Nouveau : ${x.pseudo} répond à ton annonce !`));
     S.partants.forEach(x => avant.add(x.id)); premier = false;
@@ -1115,16 +1140,17 @@ form.addEventListener('submit', async e => {
 
   const t = typeChoisi();
   const data = {
-    type:t, pseudo, mode:$('#f-mode').value, plateforme:$('#f-plateforme').value, niveau:$('#f-niveau').value,
+    type:t, pseudo, mode:$('#f-mode').value, plateforme:$('#f-plateforme').value, niveau:$('#f-niveau').value, langue:$('#f-langue').value,
     micro:$('#f-micro').checked, format: t === 'equipe' ? $('#f-format').value : '',
     manque: t === 'equipe' ? (parseInt($('#f-manque').value, 10) || 1) : 0, message:msg
   };
   ecrire('escouade.pseudo', pseudo); ecrire('escouade.regles', true);
+  ecrire('escouade.profil', Object.assign(lire('escouade.profil', {}), {langue:data.langue}));
 
   if(DEMO){
     S.annonces.set('moi', Object.assign({uid:'moi', t:Date.now(), mine:true, demoPartants:[
-      {id:'d1', pseudo:'Kawa_Gold', niveau:'confirme', plateforme:'PC', micro:true, statut:'attente'},
-      {id:'d2', pseudo:'lili.drop', niveau:'debutant', plateforme:'Mobile', micro:false, statut:'attente'}
+      {id:'d1', pseudo:'Kawa_Gold', niveau:'confirme', plateforme:'PC', langue:'fr', micro:true, statut:'attente'},
+      {id:'d2', pseudo:'lili.drop', niveau:'debutant', plateforme:'Mobile', langue:'es', micro:false, statut:'attente'}
     ]}, data));
     finPublication(); return;
   }
@@ -1262,7 +1288,7 @@ function versAnnonce(snap){
   const d = snap.data({serverTimestamps:'estimate'});
   return {
     uid:snap.id, type:d.type, pseudo:String(d.pseudo || ''), mode:d.mode, plateforme:d.plateforme, niveau:d.niveau,
-    micro:!!d.micro, format:d.format, manque:d.manque, message:d.message || '',
+    micro:!!d.micro, langue:d.langue || '', format:d.format, manque:d.manque, message:d.message || '',
     t: d.createdAt && d.createdAt.toMillis ? d.createdAt.toMillis() : Date.now(),
     ts: d.createdAt && d.createdAt.toMillis ? d.createdAt : null
   };
@@ -1395,10 +1421,10 @@ async function demarrer(){
     etat("Mode démo : les annonces ci-dessous sont des exemples. Colle ta configuration Firebase dans index.html pour ouvrir l'appli à tous.");
     const now = Date.now();
     [
-      {uid:'ex1', type:'equipe', pseudo:'Kawa_Gold', mode:'Zéro Construction', plateforme:'PC', niveau:'confirme', micro:true, format:'Escouade', manque:1, message:"On est trois, il en manque un pour monter en classé ce soir. Calme et bonne com', on joue jusqu'à 22 h.", age:6},
-      {uid:'ex2', type:'besoin', pseudo:'lili.drop', mode:'Battle Royale', plateforme:'Mobile', niveau:'debutant', micro:false, format:'', manque:0, message:"Je bloque sur une quête de la semaine. Quelqu'un pour m'aider en duo, même sans micro ?", age:14},
-      {uid:'ex3', type:'propose', pseudo:'Nyxo_build', mode:'Créatif', plateforme:'PlayStation', niveau:'competitif', micro:true, format:'', manque:0, message:"Je peux t'apprendre les bases de l'édition et des 90s sur une map d'entraînement. Débutants bienvenus.", age:22},
-      {uid:'ex4', type:'equipe', pseudo:'TomTom_77', mode:'Rechargé', plateforme:'Switch', niveau:'intermediaire', micro:false, format:'Duo', manque:1, message:'Cherche un duo tranquille, pas besoin de micro, on communique avec les marqueurs.', age:31}
+      {uid:'ex1', langue:'fr', type:'equipe', pseudo:'Kawa_Gold', mode:'Zéro Construction', plateforme:'PC', niveau:'confirme', micro:true, format:'Escouade', manque:1, message:"On est trois, il en manque un pour monter en classé ce soir. Calme et bonne com', on joue jusqu'à 22 h.", age:6},
+      {uid:'ex2', langue:'fr', type:'besoin', pseudo:'lili.drop', mode:'Battle Royale', plateforme:'Mobile', niveau:'debutant', micro:false, format:'', manque:0, message:"Je bloque sur une quête de la semaine. Quelqu'un pour m'aider en duo, même sans micro ?", age:14},
+      {uid:'ex3', langue:'en', type:'propose', pseudo:'Nyxo_build', mode:'Créatif', plateforme:'PlayStation', niveau:'competitif', micro:true, format:'', manque:0, message:"Je peux t'apprendre les bases de l'édition et des 90s sur une map d'entraînement. Débutants bienvenus.", age:22},
+      {uid:'ex4', langue:'fr', type:'equipe', pseudo:'TomTom_77', mode:'Rechargé', plateforme:'Switch', niveau:'intermediaire', micro:false, format:'Duo', manque:1, message:'Cherche un duo tranquille, pas besoin de micro, on communique avec les marqueurs.', age:31}
     ].forEach(p => { p.t = now - p.age * MIN; p.ts = {toMillis:() => p.t, nanoseconds:0}; p.exemple = true; S.annonces.set(p.uid, p); });
     S.charge = true; afficher(); return;
   }
