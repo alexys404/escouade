@@ -213,7 +213,7 @@ textarea.inp{resize:vertical;min-height:96px;line-height:1.45}
   <div class="wrap">
     <svg class="mark" viewBox="0 0 34 34" aria-hidden="true"><rect class="m-a" x="0" y="0" width="34" height="34" rx="10"/><circle class="m-d" cx="12" cy="12" r="4.6"/><circle class="m-d" cx="22" cy="12" r="4.6"/><circle class="m-d" cx="12" cy="22" r="4.6"/><circle class="m-y" cx="22" cy="22" r="4.6"/></svg>
     <h1 class="brand">Escouade</h1>
-    <span class="live"><i aria-hidden="true"></i><b id="live-n">0</b>&nbsp;annonces</span>
+    <span class="live"><i aria-hidden="true"></i><b id="live-n">0</b>&nbsp;<span id="live-l">annonce</span></span>
     <button type="button" class="acct" id="acct" hidden>Connexion</button>
   </div>
 </header>
@@ -666,6 +666,8 @@ function listePartants(p){
     (liste.length ? lignes : `<p class="hint">${lib.vide}</p>`) + `</div>`;
 }
 
+function compteur(n){ $('#live-n').textContent = n; $('#live-l').textContent = n > 1 ? 'annonces' : 'annonce'; }
+
 function visibles(){
   const now = Date.now();
   return [...S.annonces.values()]
@@ -675,13 +677,13 @@ function visibles(){
 
 function afficherFil(){
   const all = visibles();
-  $('#live-n').textContent = all.length;
+  compteur(all.length);
   const f = S.filtre;
   const liste = all.filter(p =>
     (f.type === 'tout' || p.type === f.type) && (!f.mode || p.mode === f.mode) &&
     (!f.plateforme || p.plateforme === f.plateforme) && (!f.micro || p.micro));
   $('#feed').innerHTML = liste.map(carte).join('');
-  if(!DEMO && S.total !== null) $('#live-n').textContent = Math.max(S.total, all.length);
+  if(!DEMO && S.total !== null) compteur(Math.max(S.total, all.length));
   $('#more').hidden = DEMO || !S.charge || (!S.plus && all.length === 0);
   $('#plus').hidden = !S.plus;
   $('#plus').disabled = S.chargePlus;
